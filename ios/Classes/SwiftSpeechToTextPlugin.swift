@@ -349,11 +349,12 @@ public class SwiftSpeechToTextPlugin: NSObject, FlutterPlugin {
                                      details: nil ))
                 return
             }
-            if ( onDevice ) {
-                if #available(iOS 13.0, *), !localRecognizer.supportsOnDeviceRecognition {
-                    result(FlutterError( code: SpeechToTextErrors.onDeviceError.rawValue,
+            if #available(iOS 13.0, *) {
+                let supportsOnDeviceRecognition = localRecognizer.supportsOnDeviceRecognition
+                if (!supportsOnDeviceRecognition && onDevice) {
+                    result(FlutterError(code: SpeechToTextErrors.onDeviceError.rawValue,
                                          message:"on device recognition is not supported on this device",
-                                         details: nil ))
+                                         details: nil))
                 }
             }
             rememberedAudioCategory = self.audioSession.category

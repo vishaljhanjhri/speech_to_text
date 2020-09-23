@@ -324,7 +324,7 @@ public class SpeechToTextPlugin :
     }
 
     private fun notifyListening(isRecording: Boolean) {
-        debugLog("Notify listening")
+        debugLog("Notify listening === $isRecording")
         listening = isRecording
         val status = when (isRecording) {
             true -> SpeechToTextStatus.listening.name
@@ -462,7 +462,8 @@ public class SpeechToTextPlugin :
                             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE,
                                     localContext.applicationInfo.packageName)
                         }
-                        debugLog("put package")
+                        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 10000);
+                        debugLog("put package $partialResults")
                         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, partialResults)
                         debugLog("put partial")
                         if (languageTag != Locale.getDefault().toLanguageTag()) {
@@ -470,9 +471,9 @@ public class SpeechToTextPlugin :
                             debugLog("put languageTag")
                         }
                         if ( onDevice ) {
-                            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, onDevice );
+                            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, onDevice);
                         }
-                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,10)
+                        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                     }
                 }
             }
@@ -509,6 +510,7 @@ public class SpeechToTextPlugin :
     override fun onPartialResults(results: Bundle?) = updateResults(results, false)
     override fun onResults(results: Bundle?) = updateResults(results, true)
     override fun onEndOfSpeech() = notifyListening(isRecording = false)
+    override fun onBeginningOfSpeech() = notifyListening(isRecording = true)
 
     override fun onError(errorCode: Int) {
         val delta = System.currentTimeMillis() - speechStartTime
@@ -517,6 +519,14 @@ public class SpeechToTextPlugin :
             errorReturn = SpeechRecognizer.ERROR_SPEECH_TIMEOUT
         }
         debugLog( "Error $errorCode after start at $delta $minRms / $maxRms")
+
+        if ((errorCode == SpeechRecognizer.ERROR_NO_MATCH) || (errorCode == SpeechRecognizer.ERROR_SPEECH_TIMEOUT))  {
+            debugLog( "Error $errorCode after start at $delta $minRms / $maxRms")
+            // keep going
+            setupRecognizerIntent(defaultLanguageTag, true, ListenMode.deviceDefault, false )
+            return;
+        }
+
         val errorMsg = when (errorReturn) {
             SpeechRecognizer.ERROR_AUDIO -> "error_audio_error"
             SpeechRecognizer.ERROR_CLIENT -> "error_client"
@@ -556,7 +566,7 @@ public class SpeechToTextPlugin :
         if ( rmsdB > maxRms ) {
             maxRms = rmsdB
         }
-        debugLog("rmsDB $minRms / $maxRms")
+//        debugLog("rmsDB $minRms / $maxRms")
         handler.post {
             run {
                 channel?.invokeMethod(SpeechToTextCallbackMethods.soundLevelChange.name, rmsdB)
@@ -567,7 +577,6 @@ public class SpeechToTextPlugin :
     override fun onReadyForSpeech(p0: Bundle?) {}
     override fun onBufferReceived(p0: ByteArray?) {}
     override fun onEvent(p0: Int, p1: Bundle?) {}
-    override fun onBeginningOfSpeech() {}
 }
 
 // See https://stackoverflow.com/questions/10538791/how-to-set-the-language-in-speech-recognition-on-android/10548680#10548680

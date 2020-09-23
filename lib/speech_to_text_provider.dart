@@ -73,6 +73,10 @@ class SpeechToTextProvider extends ChangeNotifier {
     return available;
   }
 
+  //True = when manualy stopped or timed out for given time
+  //
+  bool get isStopped => _speechToText.isStopped;
+
   /// Returns true if the provider has been initialized and can be used to recognize speech.
   bool get isAvailable => _speechToText.isAvailable;
 

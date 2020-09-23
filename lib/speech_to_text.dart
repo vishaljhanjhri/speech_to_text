@@ -89,6 +89,7 @@ class SpeechToText {
   /// True if not listening or the user called cancel / stop, false
   /// if cancel/stop were invoked by timeout or error condition.
   bool _userEnded = false;
+  bool _stopped = false;
   String _lastRecognized = "";
   String _lastStatus = "";
   double _lastSoundLevel = 0;
@@ -138,6 +139,11 @@ class SpeechToText {
   /// Also goes false when listening times out if listenFor was set.
   bool get isListening => _listening;
   bool get isNotListening => !isListening;
+
+
+  //True = when manualy stopped or timed out for given time
+  //
+  bool get isStopped => _userEnded || _stopped;
 
   /// The last error received or null if none, see [initialize] to
   /// register an optional listener to be notified of errors.
@@ -208,9 +214,14 @@ class SpeechToText {
 
   Future<void> _stop() async {
     if (!_initWorked) {
+      print("======== _initWorked");
       return;
     }
+    _stopped = true;
+    print("======== 3333333333");
     _shutdownListener();
+    _onNotifyStatus(_lastStatus);
+
     await channel.invokeMethod('stop');
     Timer(Duration(milliseconds: 100), _notifyFinalResults);
   }
@@ -301,12 +312,16 @@ class SpeechToText {
     }
     _userEnded = false;
     _lastSpeechResult = null;
+    _lastError = null;
     _cancelOnError = cancelOnError;
     _recognized = false;
     _notifiedFinal = false;
+    _stopped = false;
     _resultListener = onResult;
     _soundLevelChange = onSoundLevelChange;
     _partialResults = partialResults;
+    _listenStartedAt = 0;
+    _lastSpeechEventAt = 0;
     Map<String, dynamic> listenParams = {
       "partialResults": partialResults || null != pauseFor,
       "onDevice": onDevice,
@@ -323,6 +338,7 @@ class SpeechToText {
         _setupListenAndPause(pauseFor, listenFor);
       }
     } on PlatformException catch (e) {
+      print("====== ${e} xxx xx ${e.message}");
       throw ListenFailedException(e.details);
     }
   }
@@ -347,7 +363,7 @@ class SpeechToText {
           pauseFor.inMilliseconds);
       minDuration = Duration(milliseconds: minMillis);
     }
-    // print("Waiting for ${minDuration.inMilliseconds}");
+    print("Waiting for ${minDuration.inMilliseconds}");
     _listenTimer = Timer(minDuration, _stopOnPauseOrListen);
   }
 
@@ -357,7 +373,7 @@ class SpeechToText {
       clock.now().millisecondsSinceEpoch - _lastSpeechEventAt;
 
   void _stopOnPauseOrListen() {
-    // print("Stop? $_elapsedListenMillis / $_elapsedSinceSpeechEvent");
+    print("Stop? $_elapsedListenMillis / $_elapsedSinceSpeechEvent");
     if (null != _listenFor &&
         _elapsedListenMillis >= _listenFor.inMilliseconds) {
       _stop();
@@ -413,7 +429,10 @@ class SpeechToText {
   }
 
   Future _handleCallbacks(MethodCall call) async {
-    // print("SpeechToText call: ${call.method} ${call.arguments}");
+    if (call.method != soundLevelChangeMethod) {
+      print("SpeechToText call: ${call.method} ${call.arguments}");
+    }
+
     switch (call.method) {
       case textRecognitionMethod:
         if (call.arguments is String) {
@@ -445,13 +464,15 @@ class SpeechToText {
         SpeechRecognitionResult.fromJson(resultMap);
     if (_lastSpeechResult == null || _lastSpeechResult != speechResult) {
       _lastSpeechEventAt = clock.now().millisecondsSinceEpoch;
+    } else {
+      print("_lastSpeechEventAt is not update");
     }
     _lastSpeechResult = speechResult;
     if (!_partialResults && !speechResult.finalResult) {
       return;
     }
     _recognized = true;
-    // print("Recognized text $resultJson");
+    print("Recognized text $resultJson");
 
     _lastRecognized = speechResult.recognizedWords;
     if (speechResult.finalResult) {
@@ -466,7 +487,7 @@ class SpeechToText {
     if (_notifiedFinal) return;
     if (_lastSpeechResult != null && null != _resultListener) {
       var finalResult = _lastSpeechResult.toFinal();
-      // print("Notifying final");
+      print("Notifying final");
       _resultListener(finalResult);
     }
   }
